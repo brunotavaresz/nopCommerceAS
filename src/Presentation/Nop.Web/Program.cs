@@ -2,6 +2,9 @@
 using Nop.Core.Configuration;
 using Nop.Core.Infrastructure;
 using Nop.Web.Framework.Infrastructure.Extensions;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Nop.Web;
 
@@ -18,6 +21,22 @@ public partial class Program
             builder.Configuration.AddJsonFile(path, true, true);
         }
         builder.Configuration.AddEnvironmentVariables();
+
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
+        var otelServiceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "nop.web";
+
+        builder.Services
+            .AddOpenTelemetry()
+            .ConfigureResource(resource => resource.AddService(otelServiceName))
+            .WithTracing(tracing => tracing
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint)))
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint)));
 
         //load application settings
         builder.Services.ConfigureApplicationSettings(builder);
