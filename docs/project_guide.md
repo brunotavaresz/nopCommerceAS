@@ -68,3 +68,15 @@ flowchart LR
 - [ ] Evidencias (screenshots)
 - [ ] CRITIQUE.md
 - [ ] README atualizado com arquitetura e execucao
+
+## Evidencias
+
+### Grafana
+![Grafana](images/grafana.png)
+
+### Jaeger
+![Jaeger - pesquisa](images/jaeger1.png)
+![Jaeger - detalhe](images/jaeger2.png)
+
+### Prometheus
+![Prometheus](images/prometheus.png)
