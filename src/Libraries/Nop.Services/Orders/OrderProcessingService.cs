@@ -1,4 +1,6 @@
 ﻿using System.Globalization;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Newtonsoft.Json;
 using Nop.Core;
 using Nop.Core.Caching;
@@ -30,6 +32,7 @@ using Nop.Services.Security;
 using Nop.Services.Shipping;
 using Nop.Services.Stores;
 using Nop.Services.Tax;
+using Nop.Services.Telemetry;
 using Nop.Services.Vendors;
 
 namespace Nop.Services.Orders;
@@ -40,6 +43,15 @@ namespace Nop.Services.Orders;
 public partial class OrderProcessingService : IOrderProcessingService
 {
     #region Fields
+
+    private static readonly ActivitySource _activitySource = new(NopTelemetryConstants.ActivitySourceName);
+    private static readonly Meter _meter = new(NopTelemetryConstants.MeterName);
+    private static readonly Counter<long> _placeOrderAttemptsCounter =
+        _meter.CreateCounter<long>("nop.checkout.place_order.attempts");
+    private static readonly Counter<long> _placeOrderFailuresCounter =
+        _meter.CreateCounter<long>("nop.checkout.place_order.failures");
+    private static readonly Histogram<double> _placeOrderDurationHistogram =
+        _meter.CreateHistogram<double>("nop.checkout.place_order.duration", unit: "ms");
 
     protected readonly CurrencySettings _currencySettings;
     protected readonly IAddressService _addressService;
@@ -1558,6 +1570,13 @@ public partial class OrderProcessingService : IOrderProcessingService
     {
         ArgumentNullException.ThrowIfNull(processPaymentRequest);
 
+        var stopwatch = Stopwatch.StartNew();
+        using var activity = _activitySource.StartActivity("checkout.place_order", ActivityKind.Internal);
+        _placeOrderAttemptsCounter.Add(1);
+
+        activity?.SetTag("checkout.flow", "place_order");
+        activity?.SetTag("checkout.lock_enabled", _orderSettings.PlaceOrderWithLock);
+
         if (processPaymentRequest.OrderGuid == Guid.Empty)
             throw new Exception("Order GUID is not generated");
 
@@ -1640,7 +1659,11 @@ public partial class OrderProcessingService : IOrderProcessingService
         }
 
         if (!_orderSettings.PlaceOrderWithLock)
-            return await placeOrder(details);
+        {
+            var unlockedResult = await placeOrder(details);
+            RecordPlaceOrderTelemetry(unlockedResult, stopwatch.Elapsed.TotalMilliseconds, activity);
+            return unlockedResult;
+        }
 
         PlaceOrderResult result;
         var resource = details.Customer.Id.ToString();
@@ -1678,7 +1701,25 @@ public partial class OrderProcessingService : IOrderProcessingService
             mutex.ReleaseMutex();
         }
 
+        RecordPlaceOrderTelemetry(result, stopwatch.Elapsed.TotalMilliseconds, activity);
         return result;
+    }
+
+    private static void RecordPlaceOrderTelemetry(PlaceOrderResult result, double durationMs, Activity activity)
+    {
+        var status = result.Success ? "success" : "failure";
+
+        _placeOrderDurationHistogram.Record(durationMs,
+            new KeyValuePair<string, object>("status", status));
+
+        if (!result.Success)
+            _placeOrderFailuresCounter.Add(1);
+
+        activity?.SetTag("checkout.result", status);
+        activity?.SetTag("checkout.error_count", result.Errors.Count);
+
+        if (!result.Success)
+            activity?.SetStatus(ActivityStatusCode.Error, "PlaceOrderResult contains errors");
     }
 
     /// <summary>

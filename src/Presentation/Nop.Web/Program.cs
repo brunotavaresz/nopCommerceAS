@@ -1,6 +1,7 @@
 ﻿using Autofac.Extensions.DependencyInjection;
 using Nop.Core.Configuration;
 using Nop.Core.Infrastructure;
+using Nop.Services.Telemetry;
 using Nop.Web.Framework.Infrastructure.Extensions;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -31,11 +32,13 @@ public partial class Program
             .WithTracing(tracing => tracing
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
+                .AddSource(NopTelemetryConstants.ActivitySourceName)
                 .AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint)))
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
+                .AddMeter(NopTelemetryConstants.MeterName)
                 .AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint)));
 
         //load application settings
