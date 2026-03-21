@@ -9,6 +9,44 @@ receivers:
 processors:
   batch:
 
+  # PII Safety Net — removes or masks sensitive attributes before export.
+  # Defence-in-depth: the application code should never add PII to spans,
+  # but auto-instrumentation (ASP.NET Core, HttpClient) may capture headers,
+  # query strings, or DB statements that contain customer data.
+  attributes/pii-redact:
+    actions:
+      # Auth headers — contain tokens / session cookies
+      - key: http.request.header.authorization
+        action: delete
+      - key: http.request.header.cookie
+        action: delete
+      - key: http.request.header.set-cookie
+        action: delete
+
+      # User identity — may leak customer IDs or emails
+      - key: enduser.id
+        action: delete
+      - key: user.email
+        action: delete
+      - key: user.name
+        action: delete
+
+      # URL query strings — may contain email, token, reset codes
+      - key: url.query
+        action: delete
+      - key: http.url
+        action: delete
+
+      # DB statements — SQL may contain names, addresses, emails
+      - key: db.statement
+        action: delete
+
+      # Request/response bodies that may carry PII
+      - key: http.request.body
+        action: delete
+      - key: http.response.body
+        action: delete
+
 exporters:
   otlp/jaeger:
     endpoint: jaeger:4317
@@ -21,9 +59,9 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [attributes/pii-redact, batch]
       exporters: [otlp/jaeger]
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [attributes/pii-redact, batch]
       exporters: [prometheus]

@@ -59,10 +59,10 @@ flowchart LR
 
 ## Checklist de Entrega
 - [x] Flow escolhido e mapeado
-- [ ] OpenTelemetry ligado na aplicacao
-- [ ] Spans custom no checkout
-- [ ] 2 metricas custom implementadas
-- [ ] Estrategia de PII documentada e aplicada
+- [x] OpenTelemetry ligado na aplicacao
+- [x] Spans custom no checkout
+- [x] 2 metricas custom implementadas
+- [x] Estrategia de PII documentada e aplicada
 - [ ] Dashboard pronto e exportado (JSON)
 - [ ] Script de carga e instrucoes
 - [ ] Evidencias (screenshots)
@@ -73,10 +73,22 @@ flowchart LR
 
 ### Grafana
 ![Grafana](images/grafana.png)
+Dashboard com paineis de attempts, error rate, duracao media e comparacao attempts vs failures.
 
 ### Jaeger
 ![Jaeger - pesquisa](images/jaeger1.png)
+Lista de traces do servico `nop.web` — cada trace corresponde a um request HTTP processado pela aplicacao.
+
 ![Jaeger - detalhe](images/jaeger2.png)
+Detalhe de um trace mostrando o span `checkout.place_order` como filho do request HTTP.
+
+### Jaeger — PII redaction
+![Jaeger - traces sem PII](images/jaeger3.png)
+Apos configurar o processor `attributes/pii-redact` no OTel Collector, os traces mostram apenas dados operacionais — sem cookies, authorization headers, emails ou SQL statements.
+
+![Jaeger - checkout trace limpo](images/jaeger4.png)
+Trace do checkout completo: span HTTP pai com span `checkout.place_order` filho. Atributos visiveis sao apenas `checkout.result`, `checkout.flow`, `checkout.error_count` — zero PII.
 
 ### Prometheus
 ![Prometheus](images/prometheus.png)
+Metricas custom (`nop_checkout_place_order_attempts_total`, `failures`, `duration`) visiveis e a serem scrapeadas pelo Prometheus via OTel Collector.
