@@ -77,12 +77,12 @@ Os consumers sao registados automaticamente no DI — o `NopStartup` faz scan de
 ### Onde e Facil/Dificil Adicionar Observabilidade
 
 **Facil:**
-- **Nop.Web (controllers)**: a auto-instrumentacao do ASP.NET Core ja cria spans para cada request HTTP automaticamente — nao precisamos de tocar nos controllers
+- **Nop.Web (controllers)**: a auto-instrumentacao do ASP.NET Core ja cria spans para cada request HTTP automaticamente — nao e preciso tocar nos controllers
 - **Nop.Services (servicos)**: os servicos sao injectados via DI e tem metodos async bem definidos — basta adicionar `ActivitySource.StartActivity()` no inicio de cada metodo
 - **EventPublisher**: ponto natural de instrumentacao — um unico lugar onde todos os eventos passam
 
 **Dificil:**
-- **Metodos privados dentro dos servicos**: metodos como `GetProcessPaymentResultAsync`, `SaveOrderDetailsAsync`, `MoveShoppingCartItemsToOrderItemsAsync` sao privados dentro do `OrderProcessingService` — para instrumenta-los precisamos de modificar o codigo da classe directamente
+- **Metodos internos do servico**: metodos como `GetProcessPaymentResultAsync`, `SaveOrderDetailsAsync`, `MoveShoppingCartItemsToOrderItemsAsync` sao `protected virtual` dentro do `OrderProcessingService` — apesar de poderem ser overridden, na pratica sao passos internos do `PlaceOrderAsync` e para instrumenta-los foi necessario modificar o codigo da classe directamente
 - **Caching (IStaticCacheManager)**: o cache e usado extensivamente mas de forma transparente — nao ha forma facil de saber se um resultado veio do cache ou da BD sem instrumentar o cache manager
 - **Plugins**: os plugins (Brevo, Avalara, etc.) sao event consumers independentes — instrumenta-los requer modificar cada plugin individualmente
 
@@ -90,9 +90,9 @@ Os consumers sao registados automaticamente no DI — o `NopStartup` faz scan de
 
 As mudancas ao codigo existente foram minimizadas:
 
-1. **`OrderProcessingService.cs`** — adicionamos `ActivitySource` e `Meter` como campos estaticos, e wrapping do `PlaceOrderAsync` com spans e metricas. A logica de negocio nao foi alterada.
+1. **`OrderProcessingService.cs`** — adicionei `ActivitySource` e `Meter` como campos estaticos, e wrapping do `PlaceOrderAsync` com spans e metricas. A logica de negocio nao foi alterada.
 
-2. **`Program.cs` (Nop.Web)** — adicionamos a configuracao de OpenTelemetry (tracing + metrics + OTLP exporter). Mudanca isolada no ponto de entrada da aplicacao.
+2. **`Program.cs` (Nop.Web)** — adicionei a configuracao de OpenTelemetry (tracing + metrics + OTLP exporter). Mudanca isolada no ponto de entrada da aplicacao.
 
 3. **`otel-collector-config.yml`** — novo ficheiro de infraestrutura, sem impacto no codigo.
 
