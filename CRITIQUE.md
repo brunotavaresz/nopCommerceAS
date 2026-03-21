@@ -24,7 +24,7 @@ Os plugins (Brevo, Avalara, etc.) sao event consumers independentes registados a
 
 ## O que mudaria para tornar o nopCommerce mais observavel — e a que custo?
 
-**Extrair os sub-passos do checkout para servicos injectaveis.** Em vez de metodos privados dentro do `OrderProcessingService`, teria `IPaymentProcessingService`, `IOrderPersistenceService`, `IOrderNotificationService`. Isto permitiria instrumentar cada fase com decorators ou middleware, sem tocar na logica de negocio. O custo e refactoring significativo — o `OrderProcessingService` tem ~1800 linhas e os metodos privados partilham estado local entre si. Separar isto sem introduzir bugs requer testes de regressao que o projecto actualmente nao tem cobertura suficiente para garantir.
+**Extrair os sub-passos do checkout para servicos injectaveis.** Em vez de metodos `protected virtual` internos ao `OrderProcessingService`, teria `IPaymentProcessingService`, `IOrderPersistenceService`, `IOrderNotificationService`. Isto permitiria instrumentar cada fase com decorators ou middleware, sem tocar na logica de negocio. O custo e refactoring significativo — o `OrderProcessingService` tem ~1800 linhas e os metodos internos partilham estado local entre si. Separar isto sem introduzir bugs requer testes de regressao que o projecto actualmente nao tem cobertura suficiente para garantir.
 
 **Adicionar um `IObservableEventPublisher` wrapper.** O `EventPublisher` actual nao emite spans. Um wrapper que cria um span por evento publicado (com o tipo de evento como atributo) daria visibilidade sobre todos os eventos do sistema automaticamente. O custo e minimo — uma classe wrapper e uma alteracao no registo de DI.
 
