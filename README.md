@@ -1,4 +1,128 @@
-﻿﻿nopCommerce: free and open-source eCommerce solution
+﻿﻿# Assignment 1 — nopCommerce + OpenTelemetry
+
+**Software Architectures** | Master in Informatics Engineering | Individual Assignment
+
+## Fluxo Instrumentado
+
+Fluxo escolhido: **Customer places an order** (checkout completo).
+
+Instrumentacao no `OrderProcessingService.PlaceOrderAsync` com spans e metricas custom.
+
+## Diagrama de Arquitectura
+
+### Camadas e dependencias
+![Arquitectura em camadas](docs/images/diagram1.png)
+
+### Fluxo instrumentado (spans, metricas, pipeline OTel)
+![Fluxo instrumentado](docs/images/diagram2.png)
+
+### Metricas Custom
+
+| Metrica | Tipo | Justificacao |
+|---------|------|-------------|
+| `nop.checkout.place_order.attempts` | Counter | Permite monitorizar o volume de checkouts. Se cair a pico, pode indicar problema no frontend ou no fluxo antes do checkout. |
+| `nop.checkout.place_order.failures` | Counter | Conta falhas no checkout. Combinado com attempts, calcula o error rate. Se subir as 2am, o engenheiro de on-call sabe que ha um problema no pipeline de checkout. |
+| `nop.checkout.place_order.duration` | Histogram | Mede a latencia do checkout. Se o p95 subir, indica degradacao antes dos utilizadores comecarem a ver erros (ex: BD lenta, payment gateway com timeout). |
+
+### Estrategia de PII
+
+- **No codigo**: atributos dos spans sao exclusivamente operacionais (item_count, order.total, payment.method). Zero dados pessoais.
+- **No OTel Collector**: processor `attributes/pii-redact` apaga headers de auth, cookies, emails, SQL statements, query strings e bodies antes de exportar para Jaeger/Prometheus.
+- **Abordagem**: defence-in-depth — mesmo que a auto-instrumentacao capture PII acidentalmente, o Collector remove antes de chegar ao backend.
+
+## Como correr
+
+### Pre-requisitos
+
+- Docker e Docker Compose
+- k6 (para load tests): `https://k6.io/docs/getting-started/installation/`
+
+### 1. Iniciar a aplicacao + stack de observabilidade
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d --build
+```
+
+### 2. Instalacao do nopCommerce (primeira vez)
+
+Abrir `http://localhost:80` e completar a instalacao:
+
+- **Database**: SQL Server
+- **Connection string** (usar "Enter raw connection string"):
+  ```
+  Data Source=nopcommerce_database;Initial Catalog=nopcommerce;User Id=sa;Password=nopCommerce_db_password;Trust Server Certificate=True
+  ```
+- Preencher email e password de admin
+- Clicar "Install"
+- Depois da instalacao, reiniciar o container: `docker restart nopcommerce`
+
+### 3. Ver o dashboard
+
+- **Grafana**: `http://localhost:3000` (login: admin/admin)
+  - Dashboard: Dashboards > nopCommerce > nopCommerce Checkout Observability
+- **Jaeger**: `http://localhost:16686`
+  - Service: `nop.web`, Operation: `checkout.place_order`
+- **Prometheus**: `http://localhost:9090`
+
+### 4. Correr o load test
+
+```bash
+k6 run loadtest/checkout-flow.js
+```
+
+Ou com parametros custom:
+
+```bash
+k6 run --vus 5 --duration 2m loadtest/checkout-flow.js
+```
+
+O load test faz o fluxo completo: registo de utilizador, browse, add to cart, submit do carrinho, e checkout com 6 passos (billing, shipping, payment, confirm).
+
+Durante o load test, o Grafana mostra os paineis a responder em tempo real e o Jaeger mostra os traces com sub-spans.
+
+### 5. Parar tudo
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml down
+```
+
+## Estrutura dos ficheiros relevantes
+
+```
+.
+├── CRITIQUE.md                              # Reflexao critica
+├── README.md                                # Este ficheiro
+├── docker-compose.yml                       # App (nopCommerce + SQL Server)
+├── docker-compose.observability.yml         # Stack observabilidade
+├── otel-collector-config.yml                # Config do Collector + PII redaction
+├── prometheus.yml                           # Config do Prometheus
+├── loadtest/
+│   └── checkout-flow.js                     # Script k6
+├── grafana/
+│   └── provisioning/
+│       ├── datasources/datasources.yml      # Prometheus + Jaeger
+│       └── dashboards/
+│           ├── dashboards.yml
+│           └── nop-checkout-observability.json  # Dashboard exportado
+├── docs/
+│   ├── project_guide.md                     # Analise arquitectural
+│   └── images/                              # Screenshots/diagramas
+└── src/
+    ├── Libraries/Nop.Services/
+    │   ├── Orders/OrderProcessingService.cs # Instrumentacao (spans + metricas)
+    │   └── Telemetry/NopTelemetryConstants.cs
+    └── Presentation/Nop.Web/
+        └── Program.cs                       # Configuracao OTel SDK
+```
+
+## Documentacao adicional
+
+- [Analise arquitectural completa](docs/project_guide.md) — camadas, IEventPublisher, pontos de instrumentacao
+- [CRITIQUE.md](CRITIQUE.md) — o que ajudou/dificultou, mudancas cirurgicas, o que mudaria
+
+---
+
+nopCommerce: free and open-source eCommerce solution
 ===========
 
 [nopCommerce](https://www.nopcommerce.com/?utm_source=github&utm_medium=content&utm_campaign=homepage) is the best open-source eCommerce platform. nopCommerce is free, and it is the most popular ASP.NET Core shopping cart.

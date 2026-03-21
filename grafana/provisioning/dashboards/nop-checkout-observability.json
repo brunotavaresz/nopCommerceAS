@@ -129,13 +129,22 @@
     },
     {
       "id": 5,
-      "type": "text",
-      "title": "Trace View",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
-      "options": {
-        "mode": "markdown",
-        "content": "Use Jaeger to view traces for `checkout.place_order`:\n\n- http://localhost:16686/search\n- Service: `nop.web`\n- Operation: `checkout.place_order`\n\nThis complements the metrics panels above with full request-level trace details."
-      }
+      "type": "table",
+      "title": "Checkout Traces (Jaeger)",
+      "datasource": {
+        "type": "jaeger",
+        "uid": "jaeger"
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
+      "targets": [
+        {
+          "queryType": "search",
+          "refId": "A",
+          "service": "nop.web",
+          "operation": "checkout.place_order",
+          "limit": 20
+        }
+      ]
     }
   ]
 }

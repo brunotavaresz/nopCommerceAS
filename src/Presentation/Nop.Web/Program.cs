@@ -32,6 +32,7 @@ public partial class Program
             .WithTracing(tracing => tracing
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
+                .AddSqlClientInstrumentation()
                 .AddSource(NopTelemetryConstants.ActivitySourceName)
                 .AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint)))
             .WithMetrics(metrics => metrics
