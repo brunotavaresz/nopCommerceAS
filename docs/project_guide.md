@@ -139,8 +139,8 @@ A decisao de instrumentar no `OrderProcessingService` (camada Services) em vez d
 - [x] Dashboard pronto e exportado (JSON)
 - [x] Script de carga e instrucoes
 - [x] Evidencias (screenshots)
-- [ ] CRITIQUE.md
-- [ ] README atualizado com arquitetura e execucao
+- [x] CRITIQUE.md
+- [x] README atualizado com arquitetura e execucao
 
 ## Evidencias
 

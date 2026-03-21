@@ -76,7 +76,7 @@ Ou com parametros custom:
 k6 run --vus 5 --duration 2m loadtest/checkout-flow.js
 ```
 
-O load test faz o fluxo completo: registo de utilizador, browse, add to cart, submit do carrinho, e checkout com 6 passos (billing, shipping, payment, confirm).
+O load test faz o fluxo completo: registo de utilizador, browse, add to cart, submit do carrinho, e checkout com 6 passos AJAX (billing address, shipping address, shipping method, payment method, payment info, confirm).
 
 Durante o load test, o Grafana mostra os paineis a responder em tempo real e o Jaeger mostra os traces com sub-spans.
 

@@ -14,7 +14,7 @@ A configuracao via `Program.cs` como ponto de entrada unico da aplicacao tambem 
 
 ### O que dificultou
 
-Os sub-passos do checkout — `GetProcessPaymentResultAsync`, `SaveOrderDetailsAsync`, `MoveShoppingCartItemsToOrderItemsAsync`, `SendNotificationsAndSaveNotesAsync` — sao metodos **privados** dentro do `OrderProcessingService`. Nao ha forma de os instrumentar sem modificar a classe directamente. Se fossem servicos separados injectados via DI, poderia usar decorators ou middleware para adicionar spans sem tocar no codigo de negocio.
+Os sub-passos do checkout — `GetProcessPaymentResultAsync`, `SaveOrderDetailsAsync`, `MoveShoppingCartItemsToOrderItemsAsync`, `SendNotificationsAndSaveNotesAsync` — sao metodos **protected virtual** dentro do `OrderProcessingService`. Apesar de poderem ser overridden numa subclasse, na pratica ninguem os chama de fora — sao passos internos do `PlaceOrderAsync`. Para os instrumentar sem modificar a classe directamente, teria de criar uma subclasse que faz override de cada metodo so para adicionar spans, o que e fragil e pouco pratico. Se fossem servicos separados injectados via DI, poderia usar decorators ou middleware para adicionar spans sem tocar no codigo de negocio.
 
 O `PlaceOrderAsync` usa uma local function (`placeOrder`) com logica condicional para locking (`PlaceOrderWithLock`). Isto complicou o posicionamento dos sub-spans porque tive de os colocar dentro da local function, respeitando os dois caminhos de execucao (com e sem lock).
 
