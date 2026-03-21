@@ -1583,47 +1583,97 @@ public partial class OrderProcessingService : IOrderProcessingService
         //prepare order details
         var details = await PreparePlaceOrderDetailsAsync(processPaymentRequest);
 
+        // --- Operational attributes (no PII) ---
+        // Architectural decision: we tag the span with data that helps an operator
+        // diagnose checkout issues (cart size, totals, payment method, currency)
+        // but deliberately EXCLUDE customer identity, addresses, emails.
+        // PII is also stripped at the collector level as a second line of defence.
+        activity?.SetTag("checkout.cart.item_count", details.Cart.Count);
+        activity?.SetTag("checkout.order.total", (double)details.OrderTotal);
+        activity?.SetTag("checkout.order.currency", details.CustomerCurrencyCode);
+        activity?.SetTag("checkout.payment.method", processPaymentRequest.PaymentMethodSystemName);
+        activity?.SetTag("checkout.shipping.method", details.ShippingMethodName ?? "none");
+        activity?.SetTag("checkout.shipping.pickup_in_store", details.PickupInStore);
+        activity?.SetTag("checkout.discounts.count", details.AppliedDiscounts.Count);
+        activity?.SetTag("checkout.gift_cards.count", details.AppliedGiftCards.Count);
+        activity?.SetTag("checkout.recurring", details.IsRecurringShoppingCart);
+
         async Task<PlaceOrderResult> placeOrder(PlaceOrderContainer placeOrderContainer)
         {
             var result = new PlaceOrderResult();
 
             try
             {
-                var processPaymentResult =
-                    await GetProcessPaymentResultAsync(processPaymentRequest, placeOrderContainer)
-                    ?? throw new NopException("processPaymentResult is not available");
+                ProcessPaymentResult processPaymentResult;
+                using (var paymentActivity = _activitySource.StartActivity("checkout.process_payment", ActivityKind.Internal))
+                {
+                    paymentActivity?.SetTag("payment.method", processPaymentRequest.PaymentMethodSystemName);
+
+                    processPaymentResult =
+                        await GetProcessPaymentResultAsync(processPaymentRequest, placeOrderContainer)
+                        ?? throw new NopException("processPaymentResult is not available");
+
+                    paymentActivity?.SetTag("payment.success", processPaymentResult.Success);
+                    paymentActivity?.SetTag("payment.status", processPaymentResult.NewPaymentStatus.ToString());
+                    if (!processPaymentResult.Success)
+                    {
+                        paymentActivity?.SetTag("payment.error_count", processPaymentResult.Errors.Count);
+                        paymentActivity?.SetStatus(ActivityStatusCode.Error, "Payment processing failed");
+                    }
+                }
 
                 if (processPaymentResult.Success)
                 {
-                    var order = await SaveOrderDetailsAsync(processPaymentRequest, processPaymentResult,
-                        placeOrderContainer);
-                    result.PlacedOrder = order;
+                    Order order;
+                    using (var saveActivity = _activitySource.StartActivity("checkout.save_order", ActivityKind.Internal))
+                    {
+                        order = await SaveOrderDetailsAsync(processPaymentRequest, processPaymentResult,
+                            placeOrderContainer);
+                        result.PlacedOrder = order;
 
-                    //move shopping cart items to order items
-                    await MoveShoppingCartItemsToOrderItemsAsync(placeOrderContainer, order);
+                        //move shopping cart items to order items
+                        await MoveShoppingCartItemsToOrderItemsAsync(placeOrderContainer, order);
 
-                    //discount usage history
-                    await SaveDiscountUsageHistoryAsync(placeOrderContainer, order);
+                        //discount usage history
+                        await SaveDiscountUsageHistoryAsync(placeOrderContainer, order);
 
-                    //gift card usage history
-                    await SaveGiftCardUsageHistoryAsync(placeOrderContainer, order);
+                        //gift card usage history
+                        await SaveGiftCardUsageHistoryAsync(placeOrderContainer, order);
+
+                        saveActivity?.SetTag("order.id", order.Id);
+                        saveActivity?.SetTag("order.payment_status", order.PaymentStatus.ToString());
+                        saveActivity?.SetTag("order.shipping_status", order.ShippingStatus.ToString());
+                        saveActivity?.SetTag("order.item_count", placeOrderContainer.Cart.Count);
+                        saveActivity?.SetTag("order.has_discounts", placeOrderContainer.AppliedDiscounts.Count > 0);
+                        saveActivity?.SetTag("order.has_gift_cards", placeOrderContainer.AppliedGiftCards.Count > 0);
+                    }
 
                     //recurring orders
                     if (placeOrderContainer.IsRecurringShoppingCart)
                         await CreateFirstRecurringPaymentAsync(processPaymentRequest, order);
 
-                    //notifications
-                    await SendNotificationsAndSaveNotesAsync(order);
+                    using (var notifyActivity = _activitySource.StartActivity("checkout.send_notifications", ActivityKind.Internal))
+                    {
+                        notifyActivity?.SetTag("notification.order_id", order.Id);
+                        notifyActivity?.SetTag("notification.store_id", processPaymentRequest.StoreId);
 
-                    //reset checkout data
-                    await _customerService.ResetCheckoutDataAsync(placeOrderContainer.Customer,
-                        processPaymentRequest.StoreId, clearCouponCodes: true, clearCheckoutAttributes: true);
-                    await _customerActivityService.InsertActivityAsync("PublicStore.PlaceOrder",
-                        string.Format(await _localizationService.GetResourceAsync("ActivityLog.PublicStore.PlaceOrder"),
-                            order.Id), order);
+                        //notifications
+                        await SendNotificationsAndSaveNotesAsync(order);
 
-                    //raise event       
-                    await _eventPublisher.PublishAsync(new OrderPlacedEvent(order));
+                        //reset checkout data
+                        await _customerService.ResetCheckoutDataAsync(placeOrderContainer.Customer,
+                            processPaymentRequest.StoreId, clearCouponCodes: true, clearCheckoutAttributes: true);
+                        await _customerActivityService.InsertActivityAsync("PublicStore.PlaceOrder",
+                            string.Format(await _localizationService.GetResourceAsync("ActivityLog.PublicStore.PlaceOrder"),
+                                order.Id), order);
+                    }
+
+                    //raise event
+                    using (var eventActivity = _activitySource.StartActivity("checkout.publish_event", ActivityKind.Internal))
+                    {
+                        await _eventPublisher.PublishAsync(new OrderPlacedEvent(order));
+                        eventActivity?.SetTag("checkout.event", "OrderPlacedEvent");
+                    }
 
                     //check order status
                     await CheckOrderStatusAsync(order);
