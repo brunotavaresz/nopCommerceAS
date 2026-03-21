@@ -25,6 +25,79 @@ flowchart LR
     H --> I[Redirect Checkout Completed]
 ```
 
+## Analise Arquitectural do nopCommerce
+
+### Camadas e Dependencias
+
+```mermaid
+graph TD
+    Web["Nop.Web (Presentation)"] --> Framework["Nop.Web.Framework"]
+    Web --> Services["Nop.Services"]
+    Web --> Data["Nop.Data"]
+    Web --> Core["Nop.Core"]
+    Framework --> Services
+    Framework --> Data
+    Framework --> Core
+    Services --> Data
+    Services --> Core
+    Data --> Core
+```
+
+O nopCommerce segue uma arquitectura em camadas com regras de dependencia estritas:
+
+| Camada | Responsabilidade | Depende de |
+|--------|-----------------|------------|
+| **Nop.Core** | Entidades, interfaces, eventos, contratos | Nenhuma (base) |
+| **Nop.Data** | Acesso a dados, repositorios, migracoes | Core |
+| **Nop.Services** | Logica de negocio, orquestracao | Core, Data |
+| **Nop.Web.Framework** | Infraestrutura web, DI, base controllers | Core, Data, Services |
+| **Nop.Web** | Controllers, views, entrada HTTP | Todas |
+
+A dependencia e sempre de cima para baixo — nenhuma camada inferior referencia uma superior.
+
+### IEventPublisher — Mecanismo de Eventos Interno
+
+O nopCommerce usa um padrão pub/sub in-process para comunicacao entre servicos:
+
+```csharp
+// Publicar (em OrderProcessingService)
+await _eventPublisher.PublishAsync(new OrderPlacedEvent(order));
+
+// Consumir (qualquer classe que implemente IConsumer<T>)
+public class BrevoEventConsumer : IConsumer<OrderPlacedEvent>
+{
+    public async Task HandleEventAsync(OrderPlacedEvent eventMessage) { ... }
+}
+```
+
+O `EventPublisher` resolve todos os `IConsumer<T>` registados via DI e chama `HandleEventAsync` sequencialmente. Se um consumer falhar, o erro e logado mas os restantes continuam a executar. Suporta `IStopProcessingEvent` para interromper a cadeia.
+
+Os consumers sao registados automaticamente no DI — o `NopStartup` faz scan de todas as classes que implementam `IConsumer<>` e regista-as como scoped.
+
+### Onde e Facil/Dificil Adicionar Observabilidade
+
+**Facil:**
+- **Nop.Web (controllers)**: a auto-instrumentacao do ASP.NET Core ja cria spans para cada request HTTP automaticamente — nao precisamos de tocar nos controllers
+- **Nop.Services (servicos)**: os servicos sao injectados via DI e tem metodos async bem definidos — basta adicionar `ActivitySource.StartActivity()` no inicio de cada metodo
+- **EventPublisher**: ponto natural de instrumentacao — um unico lugar onde todos os eventos passam
+
+**Dificil:**
+- **Metodos privados dentro dos servicos**: metodos como `GetProcessPaymentResultAsync`, `SaveOrderDetailsAsync`, `MoveShoppingCartItemsToOrderItemsAsync` sao privados dentro do `OrderProcessingService` — para instrumenta-los precisamos de modificar o codigo da classe directamente
+- **Caching (IStaticCacheManager)**: o cache e usado extensivamente mas de forma transparente — nao ha forma facil de saber se um resultado veio do cache ou da BD sem instrumentar o cache manager
+- **Plugins**: os plugins (Brevo, Avalara, etc.) sao event consumers independentes — instrumenta-los requer modificar cada plugin individualmente
+
+### Mudancas Cirurgicas Necessarias
+
+As mudancas ao codigo existente foram minimizadas:
+
+1. **`OrderProcessingService.cs`** — adicionamos `ActivitySource` e `Meter` como campos estaticos, e wrapping do `PlaceOrderAsync` com spans e metricas. A logica de negocio nao foi alterada.
+
+2. **`Program.cs` (Nop.Web)** — adicionamos a configuracao de OpenTelemetry (tracing + metrics + OTLP exporter). Mudanca isolada no ponto de entrada da aplicacao.
+
+3. **`otel-collector-config.yml`** — novo ficheiro de infraestrutura, sem impacto no codigo.
+
+A decisao de instrumentar no `OrderProcessingService` (camada Services) em vez do controller (camada Presentation) foi intencional: e onde a logica de negocio vive e onde os sub-passos (pagamento, inventario, notificacoes) sao orquestrados.
+
 ## Ordem de Execucao
 1. Arquitetura e limites de instrumentacao
 - mapear camadas e dependencias
