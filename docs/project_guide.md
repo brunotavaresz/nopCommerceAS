@@ -136,9 +136,9 @@ A decisao de instrumentar no `OrderProcessingService` (camada Services) em vez d
 - [x] Spans custom no checkout
 - [x] 2 metricas custom implementadas
 - [x] Estrategia de PII documentada e aplicada
-- [ ] Dashboard pronto e exportado (JSON)
-- [ ] Script de carga e instrucoes
-- [ ] Evidencias (screenshots)
+- [x] Dashboard pronto e exportado (JSON)
+- [x] Script de carga e instrucoes
+- [x] Evidencias (screenshots)
 - [ ] CRITIQUE.md
 - [ ] README atualizado com arquitetura e execucao
 
@@ -162,6 +162,32 @@ Apos configurar o processor `attributes/pii-redact` no OTel Collector, os traces
 ![Jaeger - checkout trace limpo](images/jaeger4.png)
 Trace do checkout completo: span HTTP pai com span `checkout.place_order` filho. Atributos visiveis sao apenas `checkout.result`, `checkout.flow`, `checkout.error_count` — zero PII.
 
+### Jaeger — Sub-spans do checkout
+![Jaeger - sub-spans](images/jaeger5.png)
+Trace detalhado do checkout com hierarquia completa de 6 spans: request HTTP -> `checkout.place_order` -> `checkout.process_payment` -> `checkout.save_order` -> `checkout.send_notifications` -> `checkout.publish_event`. Cada sub-span isola uma fase do fluxo, facilitando a identificacao de bottlenecks.
+
 ### Prometheus
 ![Prometheus](images/prometheus.png)
 Metricas custom (`nop_checkout_place_order_attempts_total`, `failures`, `duration`) visiveis e a serem scrapeadas pelo Prometheus via OTel Collector.
+
+### Load Test (k6)
+
+#### Resultados
+- **VUs**: 5 utilizadores virtuais concorrentes
+- **Duracao**: 2 minutos
+- **Iteracoes**: 55 checkouts completos
+- **Checks**: 605/605 (100% sucesso)
+- **HTTP requests**: 990 (zero falhas)
+- **Checkout duration avg**: 4217ms (p95: 4675ms)
+- **HTTP req duration p95**: 421ms (threshold < 5000ms)
+
+#### Grafana sob carga
+![Grafana - load test](images/grafana_load.png)
+Dashboard durante o load test: Place Order Attempts a subir, Duration Avg com pico visivel, painel Attempts vs Failures mostra carga sustentada.
+
+#### Jaeger sob carga
+![Jaeger - load test](images/jaeger_load.png)
+Lista de traces durante o load test — multiplos traces com 6 spans cada, correspondentes aos checkouts concorrentes.
+
+![Jaeger - load test detalhe](images/jaeger_load_detail.png)
+Detalhe de um trace sob carga mostrando a hierarquia completa de sub-spans mantida mesmo com concorrencia.
