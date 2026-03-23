@@ -14,7 +14,7 @@ Having `Program.cs` as the single entry point also made things easier. I wired u
 
 ### What hindered
 
-The checkout sub-steps — `GetProcessPaymentResultAsync`, `SaveOrderDetailsAsync`, `MoveShoppingCartItemsToOrderItemsAsync`, `SendNotificationsAndSaveNotesAsync` — are all **protected virtual** methods inside `OrderProcessingService`. They can technically be overridden via subclass, but nobody calls them from outside — they're internal steps of `PlaceOrderAsync`. Creating a subclass just to wrap each method with a span felt fragile and disproportionate. If they were separate services behind DI interfaces, I could have used decorators instead of touching the class directly.
+The checkout sub-steps — `GetProcessPaymentResultAsync`, `SaveOrderDetailsAsync`, `architecture-flowMoveShoppingCartItemsToOrderItemsAsync`, `SendNotificationsAndSaveNotesAsync` — are all **protected virtual** methods inside `OrderProcessingService`. They can technically be overridden via subclass, but nobody calls them from outside — they're internal steps of `PlaceOrderAsync`. Creating a subclass just to wrap each method with a span felt fragile and disproportionate. If they were separate services behind DI interfaces, I could have used decorators instead of touching the class directly.
 
 Another thing that complicated the work: `PlaceOrderAsync` internally uses a local function (`placeOrder`) with conditional locking logic (`PlaceOrderWithLock`). I had to place my sub-spans inside that local function, respecting both execution paths (with and without lock). Not obvious at first.
 

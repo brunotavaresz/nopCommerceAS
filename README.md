@@ -8,7 +8,8 @@
 
 ### Layers and Dependency Rules
 
-![Architecture diagram](docs/images/diagram1.png)
+![Fluxo de Arquitetura - Checkout](docs/images/architecture-flow.png)
+
 
 | Layer | Responsibility | Depends on |
 |-------|---------------|------------|
