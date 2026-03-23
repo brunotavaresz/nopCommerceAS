@@ -1583,11 +1583,7 @@ public partial class OrderProcessingService : IOrderProcessingService
         //prepare order details
         var details = await PreparePlaceOrderDetailsAsync(processPaymentRequest);
 
-        // --- Operational attributes (no PII) ---
-        // Architectural decision: we tag the span with data that helps an operator
-        // diagnose checkout issues (cart size, totals, payment method, currency)
-        // but deliberately EXCLUDE customer identity, addresses, emails.
-        // PII is also stripped at the collector level as a second line of defence.
+        // operational tags only — no customer PII (emails, addresses, names)
         activity?.SetTag("checkout.cart.item_count", details.Cart.Count);
         activity?.SetTag("checkout.order.total", (double)details.OrderTotal);
         activity?.SetTag("checkout.order.currency", details.CustomerCurrencyCode);

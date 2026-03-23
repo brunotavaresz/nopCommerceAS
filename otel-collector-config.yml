@@ -9,10 +9,7 @@ receivers:
 processors:
   batch:
 
-  # PII Safety Net — removes or masks sensitive attributes before export.
-  # Defence-in-depth: the application code should never add PII to spans,
-  # but auto-instrumentation (ASP.NET Core, HttpClient) may capture headers,
-  # query strings, or DB statements that contain customer data.
+  # strip PII that auto-instrumentation might capture (headers, SQL, query strings)
   attributes/pii-redact:
     actions:
       # Auth headers — contain tokens / session cookies
