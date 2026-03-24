@@ -2,19 +2,13 @@ import http from "k6/http";
 import { check, sleep, group } from "k6";
 import { Rate, Trend } from "k6/metrics";
 
-// ---------------------------------------------------------------------------
-// k6 Load Test — Checkout Flow (Place Order)
-//
-// Drives the "Customer places an order" flow end-to-end:
-//   1. Register a unique user
-//   2. Browse product catalogue
-//   3. Add product to cart
-//   4. Complete one-page checkout (billing, shipping, payment, confirm)
-//
-// Usage:
+//   Register user
+//   Browse product catalogue
+//   Add product to cart
+//   Complete one-page checkout (billing, shipping, payment, confirm)
+
 //   k6 run loadtest/checkout-flow.js
 //   k6 run --vus 5 --duration 2m loadtest/checkout-flow.js
-// ---------------------------------------------------------------------------
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:80";
 
@@ -33,7 +27,6 @@ export const options = {
   },
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function extractToken(html) {
   const match = html.match(
@@ -42,14 +35,13 @@ function extractToken(html) {
   return match ? match[1] : "";
 }
 
-// ── Main scenario ────────────────────────────────────────────────────────────
 
 export default function () {
   const uniqueId = `${__VU}_${__ITER}_${Date.now()}`;
   const email = `loadtest_${uniqueId}@test.com`;
   const password = "LoadTest123!";
 
-  // 1. Register a new user ──────────────────────────────────────────────────
+  // 1. Register a new user
   group("01 - Register", function () {
     const regPage = http.get(`${BASE_URL}/register`);
     const token = extractToken(regPage.body);
@@ -77,7 +69,7 @@ export default function () {
 
   sleep(1);
 
-  // 2. Browse product catalogue ─────────────────────────────────────────────
+  // 2. Browse product catalogue
   group("02 - Browse products", function () {
     const home = http.get(`${BASE_URL}/`);
     check(home, { "home ok": (r) => r.status === 200 });
@@ -88,7 +80,7 @@ export default function () {
 
   sleep(1);
 
-  // 3. Add product to cart ──────────────────────────────────────────────────
+  // 3. Add product to cart
   group("03 - Add to cart", function () {
     const productPage = http.get(`${BASE_URL}/build-your-own-computer`);
     const token = extractToken(productPage.body);
@@ -119,12 +111,12 @@ export default function () {
 
   sleep(1);
 
-  // 4. Submit cart with checkout attributes ────────────────────────────────
+  // 4. Submit cart with checkout attributes
   group("04 - Submit cart", function () {
     const cartPage = http.get(`${BASE_URL}/cart`);
     const cartToken = extractToken(cartPage.body);
 
-    // Submit cart form: set gift wrapping to "No" and accept terms
+    // Submit cart form, set gift wrapping to "No" and accept terms
     const cartSubmit = http.post(
       `${BASE_URL}/cart`,
       {
@@ -143,7 +135,7 @@ export default function () {
 
   sleep(0.5);
 
-  // 5. Checkout flow ────────────────────────────────────────────────────────
+  // 5. Checkout flow 
   group("05 - Checkout", function () {
     const checkoutStart = Date.now();
 
@@ -243,7 +235,7 @@ export default function () {
 
     sleep(0.5);
 
-    // Step 5: Confirm order — THIS triggers checkout.place_order span
+    // Step 5: Confirm order, triggers checkout.place_order span
     const confirm = http.post(
       `${BASE_URL}/checkout/OpcConfirmOrder/`,
       {
