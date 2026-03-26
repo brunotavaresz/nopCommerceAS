@@ -121,16 +121,28 @@ Configuration: [`otel-collector-config.yml`](otel-collector-config.yml)
 
 ## 4. Grafana Dashboard
 
-The dashboard has 5 panels that cover the checkout flow:
-- **Place Order Attempts** — how many checkouts are happening
-- **Place Order Error Rate** — are any failing (failures / attempts)
-- **Place Order Duration Avg** — is checkout getting slower
-- **Attempts vs Failures** — if attempts rise but duration stays flat, traffic is normal; if duration rises and failures appear, something is degrading
+The dashboard has 10 panels that cover the checkout flow:
+
+**Stats row (top):**
+- **Checkout Attempts** — checkouts per second; a drop means the checkout is unreachable
+- **Error Rate** — percentage of failed checkouts; green below 1%, red above 5%
+- **Avg Duration** — average checkout latency; green below 1s, red above 3s
+- **Total Successful Checkouts** — cumulative count of successful checkouts
+- **Total Failures** — cumulative count of failed checkouts; red if any occur
+- **Checkout Throughput** — checkouts per minute
+
+**Time series row:**
+- **Attempts vs Failures over time** — shows traffic volume and failure spikes side by side
+- **Checkout Duration p50 / p95 / p99** — latency percentiles; p95 and p99 reveal tail latency hidden by the average
+
+**Bottom row:**
+- **Error Rate over time** — 0–20% axis; shows when failures occurred
+- **Checkout Duration Avg over time** — latency trend over time
 - **Checkout Traces** — Jaeger trace links to drill into individual checkouts
 
 ### Dashboard under load
 
-![Grafana dashboard](docs/images/novo1.png)
+![Grafana dashboard](docs/images/grafana_load.png)
 
 Dashboard exported as JSON: [`grafana/provisioning/dashboards/nop-checkout-observability.json`](grafana/provisioning/dashboards/nop-checkout-observability.json)
 
