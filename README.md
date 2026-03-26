@@ -174,12 +174,6 @@ Detailed trace view showing the complete span hierarchy maintained even under co
 
 `nop_checkout_place_order_attempts_total` in Grafana Explore: 72 total checkouts after two k6 runs, with the staircase pattern showing load test activity. The `otel_scope_name="Nop.Services.Orders"` confirms these come from my custom instrumentation.
 
-### Prometheus
-
-![Prometheus](docs/images/prometheus.png)
-
-Custom metrics visible and being scraped by Prometheus via OTel Collector.
-
 ---
 
 ## 6. Load Test
@@ -204,10 +198,10 @@ k6 run --vus 5 --duration 2m loadtest/checkout-flow.js
 
 - **VUs**: 5 concurrent virtual users
 - **Duration**: 2 minutes
-- **Iterations**: 36 complete checkouts
+- **Iterations**: ~40 complete checkouts per run
 - **Checks**: 100% success
 - **HTTP requests**: zero failures
-- **Checkout duration avg**: ~3636ms
+- **Checkout duration avg**: ~100ms
 
 ### Dashboard responding to load
 
